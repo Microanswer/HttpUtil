@@ -5,12 +5,33 @@ import com.alibaba.fastjson.JSONObject;
 import okhttp3.*;
 
 import java.io.*;
+import java.lang.reflect.Method;
 import java.net.URLEncoder;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 public class HttpUtil {
+    public static boolean LOG = true; // 设定是否打印请求日志。
+
+    private static Object getLogger() {
+        try {
+            Class<?> aClass = Class.forName("org.slf4j.LoggerFactory");
+            Method getLogger = aClass.getDeclaredMethod("getLogger", Class.class);
+            getLogger.setAccessible(true);
+            return getLogger.invoke(aClass, HttpUtil.class);
+        } catch (Exception ignore) { }
+        return null;
+    }
+    private static void log(Object logger, String type, String msg) {
+        try{
+            Method declaredMethod = logger.getClass().getDeclaredMethod(type, String.class);
+            declaredMethod.setAccessible(true);
+            declaredMethod.invoke(logger, msg);
+        }catch (Exception ignore) {}
+    }
+    private static Object logger = getLogger();
     private static String CHARSET = "UTF-8";
     private static final MediaType APPLICATION_JSON = MediaType.parse("application/json");
     private static final MediaType APPLICATION_XML = MediaType.parse("application/xml");
@@ -27,7 +48,8 @@ public class HttpUtil {
         }
         return __httpClient;
     }
-    private static Response _requestForResponse(Request request) throws NetException {
+    private static String newRequestId() {return UUID.randomUUID().toString().substring(0, 5);}
+    private static Response _requestForResponse(String requestId, Request request) throws NetException {
         Call call = getHttpClient().newCall(request); // 使用请求数据建立请求。
         Response response = null; // 发起请求。
         try {
@@ -45,19 +67,21 @@ public class HttpUtil {
 
         return response;
     }
-    private static String _requestForString(Request request) throws NetException {
-        Response response = _requestForResponse(request);
+    private static String _requestForString(String requestId, Request request) throws NetException {
+        Response response = _requestForResponse(requestId, request);
         String resStr = "";
         try {
             resStr = response.body().string();
         } catch (IOException e) {
             e.printStackTrace();
         }
+        info(requestId, "response:" + resStr, null);
         return resStr;
     }
-    private static String _makeParamUrl(String url, Map<String, String> params) {
+    private static String _makeParamUrl(String requestId, String url, Map<String, String> params) {
         String queryString = map2wwwUrlFormEncode(params);
         if (queryString.length() > 0) {
+            info(requestId, "send param:" + queryString, null);
             if (url.contains("?")) {
                 url = url + "&" + queryString;
             } else {
@@ -66,18 +90,19 @@ public class HttpUtil {
         }
         return url;
     }
-    private static void _putHearderInRequestBuilder(Request.Builder builder, Map<String, String> headers) {
+    private static void _putHearderInRequestBuilder(String requestId, Request.Builder builder, Map<String, String> headers) {
         if (headers != null && headers.size() > 0) {
             Set<Map.Entry<String, String>> entries = headers.entrySet();
             for (Map.Entry<String, String> entry : entries) {
                 builder.addHeader(entry.getKey(), entry.getValue());
+                debug(requestId, "send header:" + entry.getKey() + "=" + entry.getValue(), null);
             }
         }
     }
-    private static Request _makeGetRequest(String url, Map<String, String> params, Map<String, String> headers) {
+    private static Request _makeGetRequest(String requestId, String url, Map<String, String> params, Map<String, String> headers) {
         Request.Builder builder = new Request.Builder();
-        builder.url(_makeParamUrl(url, params));
-        _putHearderInRequestBuilder(builder, headers);
+        builder.url(_makeParamUrl(requestId, url, params));
+        _putHearderInRequestBuilder(requestId, builder, headers);
         builder.get();
         return builder.build();
     }
@@ -90,6 +115,24 @@ public class HttpUtil {
             fun.d0fun(entry.getKey(), entry.getValue());
         }
     }
+    private static void debug(String requestId, String msg, Exception e) {
+        if (!LOG) return;
+        if (logger != null) {
+            log(logger, "debug", String.format("[%s] %s", requestId, msg));
+        }
+    }
+    private static void info(String requestId, String msg, Exception e) {
+        if (!LOG) return;
+        if (logger != null) {
+            log(logger, "info", String.format("[%s] %s", requestId, msg));
+        }
+    }
+    private static void error(String requestId, String msg, Exception e){
+        if (!LOG) return;
+    }
+    private static void warn(String requestId, String msg, Exception e) {
+        if (!LOG) return;
+    }
 
     /**
      * 使用 get方法 请求某地址。
@@ -100,8 +143,9 @@ public class HttpUtil {
      * @return 请求返回的字符串
      */
     public static String get(String url, Map<String, String> params, Map<String, String> headers) throws Exception {
-
-        return _requestForString(_makeGetRequest(url, params, headers));
+        String requestId = newRequestId();
+        info(requestId, "get url:" + url, null);
+        return _requestForString(requestId, _makeGetRequest(requestId, url, params, headers));
     }
 
     /**
@@ -137,17 +181,21 @@ public class HttpUtil {
      * @throws Exception 错误
      */
     public static String post(String url, final MediaType contentType, final byte[] bodyBytes, Map<String, String> headers) throws Exception {
+        String requestId = newRequestId();
+        info(requestId, "post url:" + url, null);
         Request.Builder builder = new Request.Builder();
         builder.url(url);
-        _putHearderInRequestBuilder(builder, headers);
+        _putHearderInRequestBuilder(requestId, builder, headers);
         builder.post(RequestBody.create(contentType, bodyBytes));
         Request request = builder.build(); // 建立请求数据。
         Call call = getHttpClient().newCall(request); // 使用请求数据建立请求。
         Response response = call.execute();
         if (response.code() != 200) {
-            throw new Exception("post error:" + url + " [" + response.code() + "] " + response.message());
+            throw new NetException("post error:" + url + " [" + response.code() + "] " + response.message(), response.code());
         }
-        return response.body().string();
+        String retStr = response.body().string();
+        info(requestId, "response:" + retStr, null);
+        return retStr;
     }
 
     /**
@@ -287,9 +335,11 @@ public class HttpUtil {
      * @throws Exception 错误
      */
     public static String upload(String url, Map<String, String> params, Map<String, String> headers, File... files) throws Exception {
+        String requestId = newRequestId();
+        info(requestId, "upload url:" + url, null);
         Request.Builder builder = new Request.Builder();
         builder.url(url);
-        _putHearderInRequestBuilder(builder, headers);
+        _putHearderInRequestBuilder(requestId, builder, headers);
         final MultipartBody.Builder multipartBodyBuilder = new MultipartBody.Builder();
         multipartBodyBuilder.setType(MultipartBody.FORM);
 
@@ -318,9 +368,11 @@ public class HttpUtil {
         Call call = getHttpClient().newCall(request); // 使用请求数据建立请求。
         Response response = call.execute();
         if (response.code() != 200) {
-            throw new Exception("upload error:" + url + " [" + response.code() + "] " + response.message());
+            throw new NetException("upload error:" + url + " [" + response.code() + "] " + response.message(), response.code());
         }
-        return response.body().string();
+        String retStr = response.body().string();
+        info(requestId, "response:" + retStr, null);
+        return retStr;
     }
 
     /**
@@ -331,7 +383,7 @@ public class HttpUtil {
      * @param params [N] 参数
      * @param files  [N] 文件
      * @return 上传完成后，服务器返回的字符串
-     * @throws Exception
+     * @throws Exception 错误信息
      */
     public static String upload(String url, Map<String, String> params, File... files) throws Exception {
         return upload(url, params, null, files);
@@ -360,7 +412,9 @@ public class HttpUtil {
      * @return 下载完成后对应的文件
      */
     public static File download(String url, Map<String, String> params, Map<String, String> headers, File fileOrDir) throws Exception {
-        Response response = _requestForResponse(_makeGetRequest(url, params, headers));
+        String requestId = newRequestId();
+        info(requestId, "download url:" + url, null);
+        Response response = _requestForResponse(requestId, _makeGetRequest(requestId, url, params, headers));
 
         if (fileOrDir == null || fileOrDir.isDirectory()) {
 
