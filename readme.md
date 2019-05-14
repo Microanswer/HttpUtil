@@ -1,6 +1,7 @@
 # HttpUtil 网络请求工具类
 
-网络请求工具，一个方法完成网络请求。本工具是依赖于 okhttp 进行的再一次封装，使每次网络请求代码更精简。
+网络请求工具，一个方法完成网络请求。本工具是依赖于 okhttp 进行的再一次封装，使每次网络请求代码更精简。欢迎大家提交issues或反馈bug及建议到
+[Microanswer邮箱](mailto::microanswer@outlook.com)
 
 <span style="color:red"> #注意：本工具类里所有方法均为同步方法。 </span>
 
