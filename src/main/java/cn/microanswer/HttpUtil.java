@@ -6,6 +6,7 @@ import okhttp3.*;
 
 import java.io.*;
 import java.lang.reflect.Method;
+import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.util.Map;
 import java.util.Set;
@@ -423,11 +424,45 @@ public class HttpUtil {
 
             // 从响应头获取一个文件名：
             String contentdisposition = response.header("Content-Disposition");
-            if (contentdisposition != null) {
-                int filenameIndex = contentdisposition.indexOf("filename");
-                if (filenameIndex > -1) {
-                    fileName = contentdisposition.substring(filenameIndex + 10, contentdisposition.length() - 1);
-                }
+            if (contentdisposition != null && contentdisposition.length() > 0) {
+                try {
+                    // 解析内容。
+                    String[] split = contentdisposition.split(";");
+    
+                    for (String kv : split) {
+                        String[] kvs = kv.split("=");
+                        kvs[0] = kvs[0].trim();
+                        
+                        if ("filename*".equalsIgnoreCase(kvs[0])) {
+                            String value = kvs[1];
+                            if (value != null && value.length() > 0) {
+                                
+                                String mCharset = CHARSET;
+                                
+                                if (value.contains("'")) {
+                                    String[] strings = value.split("'");
+                                    mCharset = strings[0];
+                                    value = URLDecoder.decode(strings[strings.length - 1], mCharset);
+                                } else {
+                                    value = URLDecoder.decode(value, mCharset);
+                                }
+                                fileName = value;
+                            }
+                        }
+        
+                        if (fileName != null && fileName.length() > 0) {
+                            break;
+                        }
+        
+                        if ("filename".equalsIgnoreCase(kvs[0])) {
+                            String value = URLDecoder.decode(kvs[1], CHARSET);
+                            if (value != null && value.length() > 0) {
+                                value = value.replace("\"", "");
+                            }
+                            fileName = value;
+                        }
+                    }
+                }catch (Exception ignore){/* 忽略这个错误。 */ fileName = "";}
             }
 
             // 没有获取到文件名则从url中解析文件名。
