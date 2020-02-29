@@ -12,18 +12,18 @@
 <dependency>
     <groupId>cn.microanswer</groupId>
     <artifactId>HttpUtil</artifactId>
-    <version>1.0.1</version>
+    <version>1.1.0</version>
 </dependency>
 ```
 
 ### gradle 项目
 ```groovy
-compile group: 'cn.microanswer', name: 'HttpUtil', version: '1.0.1'
+compile group: 'cn.microanswer', name: 'HttpUtil', version: '1.1.0'
 ```
 
 ### 下载 jar 包
 
-[点击下载](http://central.maven.org/maven2/cn/microanswer/HttpUtil/1.0.1/HttpUtil-1.0.1.jar)
+[点击下载](http://central.maven.org/maven2/cn/microanswer/HttpUtil/1.0.1/HttpUtil-1.1.0.jar)
 
 ## 开始使用
 
