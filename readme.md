@@ -34,7 +34,7 @@ compile group: 'cn.microanswer', name: 'HttpUtil', version: '1.1.0'
 
 ### 下载 jar 包
 
-[点击下载](http://central.maven.org/maven2/cn/microanswer/HttpUtil/1.1.0/HttpUtil-1.1.0.jar)
+[点击下载](https://repo1.maven.org/maven2/cn/microanswer/HttpUtil/1.1.0/HttpUtil-1.1.0.jar)
 
 ## 开始使用
 
